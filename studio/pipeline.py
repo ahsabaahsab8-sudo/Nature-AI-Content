@@ -187,16 +187,22 @@ class LLM:
                 return full
             except Exception as exc:  # noqa: BLE001 - upstream gateway is flaky
                 last_error = exc
+                text = str(exc)
+                # A 429 on a free gateway is a *quota window*, not a blip:
+                # retrying in seconds just burns the remaining attempts.
+                rate_limited = "429" in text or "rate_limit" in type(exc).__name__.lower()
                 if attempt < settings.llm_max_attempts:
-                    # A free gateway answers 429 under load; that needs seconds,
-                    # not milliseconds, so back off much harder for it.
-                    rate_limited = "429" in str(exc) or "ratelimit" in type(exc).__name__.lower()
-                    wait = attempt * (20 if rate_limited else 5)
+                    wait = attempt * (settings.rate_limit_backoff if rate_limited else 5)
                     try:
+                        note = (
+                            "the provider quota is exhausted - waiting for the window to reset"
+                            if rate_limited
+                            else "transient upstream error"
+                        )
                         log(
                             self.pid,
                             f"LLM attempt {attempt}/{settings.llm_max_attempts} failed "
-                            f"({type(exc).__name__}: {str(exc)[:160]}); retrying in {wait}s…",
+                            f"({type(exc).__name__}: {text[:160]}) — {note}. Retrying in {wait}s…",
                             "warn",
                         )
                     except Exception:  # noqa: BLE001 - never let logging mask the real error

@@ -27,19 +27,25 @@ say "Installing system packages (python3, ffmpeg, nodejs)..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq python3 python3-venv python3-pip ffmpeg curl ca-certificates gnupg >/dev/null
-if ! command -v node >/dev/null 2>&1; then
+
+# HyperFrames needs Node >= 22. Presence is not enough - Ubuntu 22.04 ships
+# Node 20, and `which node` would happily skip the upgrade.
+node_major() { command -v node >/dev/null 2>&1 && node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0; }
+if [ "$(node_major)" -lt 22 ]; then
+  say "Node $(node -v 2>/dev/null || echo 'missing') is too old (need >= 22) - installing NodeSource 22..."
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null
   apt-get install -y -qq nodejs >/dev/null
 fi
-node --version && ffmpeg -version | head -1
+NODE_OK="$(node_major)"
+[ "$NODE_OK" -ge 22 ] || die "Node is still v$(node -v) after upgrade - cannot continue."
+echo "  node $(node -v)"
+ffmpeg -version | head -1
 
 # ── 2. HyperFrames CLI ─────────────────────────────────────────────────────
 say "Installing the HyperFrames CLI..."
-if command -v hyperframes >/dev/null 2>&1; then
-  echo "  already installed: $(hyperframes --version)"
-else
-  npm install -g hyperframes
-fi
+npm install -g hyperframes >/dev/null
+hyperframes --version >/dev/null 2>&1 || die "hyperframes installed but will not run (check: node $(node -v))"
+echo "  hyperframes $(hyperframes --version)"
 
 # ── 3. Cloudflare tunnel client ────────────────────────────────────────────
 say "Installing cloudflared..."

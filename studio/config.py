@@ -68,6 +68,8 @@ class Settings:
     max_tokens: int = _env_int("MAX_TOKENS", 32000)
     temperature: float = _env_float("STUDIO_TEMPERATURE", 0.7)
     llm_max_attempts: int = _env_int("STUDIO_LLM_ATTEMPTS", 4)
+    # Seconds x attempt number when the gateway answers 429 (quota window).
+    rate_limit_backoff: int = _env_int("STUDIO_RATE_LIMIT_BACKOFF", 90)
 
     # ── Storage (reuses the repo-root project folders + renders/) ──
     projects_dir: Path = Path(os.getenv("STUDIO_PROJECTS_DIR", str(REPO_ROOT))).resolve()

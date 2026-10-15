@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Studio runtime state (the database and logs are per-machine)
+studio/studio.db
+studio/studio.db-wal
+studio/studio.db-shm
+studio/logs/
+studio/public_url.txt
+
+# Rendered videos and generated project folders — never commit these
+renders/*
+!renders/.gitkeep
+*-assets/
+node_modules/
+
+# OS noise
+.DS_Store
+Thumbs.db

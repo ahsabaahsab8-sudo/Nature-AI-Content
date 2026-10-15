@@ -1,0 +1,165 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0f0d">
+<title>Nature AI Studio</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>&#127807;</text></svg>">
+</head>
+<body>
+
+<!-- ── Password gate ─────────────────────────────────────────────── -->
+<div id="gate" class="gate hidden">
+  <form class="gate-card" id="gate-form">
+    <div class="gate-logo">&#127807;</div>
+    <h1>Nature AI Studio</h1>
+    <p class="muted">Video production dashboard</p>
+    <input id="gate-pass" type="password" placeholder="Dashboard password" autocomplete="current-password" required>
+    <button class="btn primary block" type="submit">Unlock</button>
+    <p class="gate-error hidden" id="gate-error">Wrong password</p>
+  </form>
+</div>
+
+<!-- ── App ───────────────────────────────────────────────────────── -->
+<div id="app" class="app hidden">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">&#127807;</span>
+      <div>
+        <strong>Nature AI Studio</strong>
+        <small id="brand-sub">prompt &rarr; images &rarr; render</small>
+      </div>
+    </div>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="compose">Compose</button>
+      <button class="tab" data-tab="history">History <span class="pill" id="history-count">0</span></button>
+    </nav>
+
+    <div class="topbar-right">
+      <button class="url-chip hidden" id="url-chip" title="Copy public URL">
+        <span class="dot"></span><span id="url-text">…</span>
+      </button>
+      <span class="status-chip" id="health-chip">connecting…</span>
+      <button class="icon-btn" id="refresh-btn" title="Refresh">&#10227;</button>
+    </div>
+  </header>
+
+  <!-- ── Compose ───────────────────────────────────────────────── -->
+  <main class="view" id="view-compose">
+    <section class="card" id="composer">
+      <h2>1 &middot; Describe your video</h2>
+      <textarea id="brief" rows="3" placeholder="e.g. 5 houseplants that are deadly to dogs — fear hook, Nature AI app reveal at the end"></textarea>
+      <div class="row">
+        <label class="field">
+          <span>Duration</span>
+          <select id="duration">
+            <option value="30">30 seconds</option>
+            <option value="45">45 seconds</option>
+            <option value="60" selected>60 seconds</option>
+            <option value="90">90 seconds</option>
+          </select>
+        </label>
+        <label class="field grow">
+          <span>Extra direction <em>(optional)</em></span>
+          <input id="notes" type="text" placeholder="e.g. keep the mascot cute, no scary gore, blue palette">
+        </label>
+        <button class="btn primary" id="analyze-btn">Analyse &amp; generate prompts</button>
+      </div>
+      <div class="stage-pill" id="composer-status"></div>
+    </section>
+
+    <section class="card hidden" id="plan-card">
+      <div class="card-head">
+        <h2>2 &middot; Story plan</h2>
+        <div class="head-actions">
+          <button class="btn ghost sm" id="copy-plan">Copy plan</button>
+          <button class="btn ghost sm" id="reanalyze">Regenerate plan</button>
+        </div>
+      </div>
+      <div class="plan-grid" id="plan-grid"></div>
+      <details class="plan-raw"><summary>Full analysis</summary><pre id="plan-raw"></pre></details>
+    </section>
+
+    <section class="card hidden" id="prompts-card">
+      <div class="card-head">
+        <h2>3 &middot; Image prompts <span class="pill" id="slot-total">0</span></h2>
+        <div class="head-actions">
+          <button class="btn ghost sm" id="copy-prompts">Copy all prompts</button>
+          <button class="btn ghost sm" id="toggle-prompt-view">Collapse all</button>
+        </div>
+      </div>
+      <p class="hint">Each prompt below becomes an upload box. Copy the prompt into your image generator, then drop the result into the matching box.</p>
+      <div id="prompt-list" class="prompt-list"></div>
+    </section>
+
+    <section class="card hidden" id="upload-card">
+      <div class="card-head">
+        <h2>4 &middot; Add your images</h2>
+        <div class="head-actions">
+          <span class="pill" id="slot-progress">0 / 0</span>
+          <button class="btn ghost sm" id="upload-next">Fill next empty</button>
+        </div>
+      </div>
+      <div class="progressbar"><i id="slot-bar"></i></div>
+      <div id="slot-grid" class="slot-grid"></div>
+    </section>
+
+    <section class="card hidden" id="render-card">
+      <div class="card-head">
+        <h2>5 &middot; Generate code &amp; render</h2>
+        <span class="pill" id="render-status">idle</span>
+      </div>
+      <p class="hint">Generates the HyperFrames composition, lints it, then renders the MP4 with live progress below.</p>
+      <button class="btn primary xl" id="render-btn">&#127916; Generate code &amp; render video</button>
+      <div class="console hidden" id="console">
+        <div class="console-head">
+          <span class="dots"><i></i><i></i><i></i></span>
+          <span class="console-title" id="console-title">live progress</span>
+          <button class="btn ghost xs" id="console-clear">Clear</button>
+        </div>
+        <pre id="console-body"></pre>
+      </div>
+      <div class="result hidden" id="result">
+        <video id="result-video" controls playsinline preload="metadata"></video>
+        <div class="result-meta" id="result-meta"></div>
+        <div class="row">
+          <a class="btn primary" id="result-download" download>&#11015; Download MP4</a>
+          <button class="btn ghost" id="result-history">View in History</button>
+          <button class="btn ghost" id="result-open">Open composition source</button>
+        </div>
+      </div>
+      <details class="hidden" id="source-details">
+        <summary>index.html</summary>
+        <pre id="source-body"></pre>
+      </details>
+    </section>
+
+    <section class="card hidden" id="projects-card">
+      <div class="card-head"><h2>Projects</h2></div>
+      <div id="project-list" class="project-list"></div>
+    </section>
+  </main>
+
+  <!-- ── History ───────────────────────────────────────────────── -->
+  <main class="view hidden" id="view-history">
+    <section class="card">
+      <div class="card-head">
+        <h2>Rendered videos</h2>
+        <div class="head-actions">
+          <span class="pill" id="history-total">0</span>
+          <button class="btn ghost sm" id="history-import" title="Add MP4s already sitting in renders/">Import from renders/</button>
+          <button class="btn ghost sm" id="history-refresh">Refresh</button>
+        </div>
+      </div>
+      <div id="history-grid" class="history-grid"></div>
+    </section>
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

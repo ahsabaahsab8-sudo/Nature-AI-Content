@@ -26,6 +26,50 @@ the Python deps, then starts both the API and the tunnel with **nohup** — clos
 SSH will not stop it. It prints your public URL and the dashboard password when done.
 
 <details>
+<summary>Cloudflare Error 1033? (tunnel hostname unreachable)</summary>
+
+1033 means the hostname exists but no `cloudflared` is connected. Almost always the
+connector died or you're looking at a **stale URL from a previous run**.
+
+```bash
+cd /opt/nature-ai
+
+# 1. is the API alive?
+curl -s http://127.0.0.1:8787/api/session | head -c 120
+
+# 2. is cloudflared alive?
+ps aux | grep '[c]loudflared'
+
+# 3. the CURRENT url (newest, not oldest)
+grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' studio/logs/cloudflared.log | tail -1
+
+# 4. why did it die?
+tail -30 studio/logs/cloudflared.log
+```
+
+Restart it by hand:
+
+```bash
+pkill -f 'cloudflared tunnel'
+cd /opt/nature-ai/studio
+nohup cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8787 \
+      >> logs/cloudflared.log 2>&1 &
+sleep 8
+grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' logs/cloudflared.log | tail -1
+```
+
+On containers or IPv6-less hosts, force the fallback flags:
+
+```bash
+nohup cloudflared tunnel --no-autoupdate --protocol http2 --edge-ip-version 4 \
+      --url http://127.0.0.1:8787 >> logs/cloudflared.log 2>&1 &
+```
+
+`deploy.sh` already tries that fallback automatically. Just re-run `sudo ./deploy.sh`
+— it truncates the logs, so the URL it prints is always the live one.
+</details>
+
+<details>
 <summary>Manual install (if you'd rather do it step by step)</summary>
 
 ```bash

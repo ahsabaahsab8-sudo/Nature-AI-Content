@@ -68,6 +68,10 @@ sleep 1
 
 mkdir -p "$LOG_DIR"
 rm -f "$STUDIO_DIR/public_url.txt"
+# Fresh logs each run: a stale trycloudflare URL from a previous run is the
+# classic source of "Error 1033" (the hostname exists, nothing is connected).
+: > "$LOG_DIR/cloudflared.log"
+: > "$LOG_DIR/api.log"
 
 # ── 6. launch the API in the background ────────────────────────────────────
 say "Starting the API on 127.0.0.1:$PORT (nohup)..."
@@ -86,20 +90,51 @@ curl -fsS "http://127.0.0.1:$PORT/api/session" >/dev/null || { tail -20 "$LOG_DI
 echo "  API is live"
 
 # ── 7. launch the Cloudflare quick tunnel in the background ────────────────
-say "Starting the Cloudflare quick tunnel (nohup)..."
-nohup cloudflared tunnel --no-autoupdate --url "http://127.0.0.1:$PORT" \
-      >> "$LOG_DIR/cloudflared.log" 2>&1 &
-echo $! > "$LOG_DIR/tunnel.pid"
+# Containers and IPv6-less hosts sometimes need the extra flags, so try the
+# default first and fall back rather than leaving a dead tunnel behind.
+start_tunnel() {
+  : > "$LOG_DIR/cloudflared.log"
+  nohup cloudflared tunnel --no-autoupdate "$@" \
+        --url "http://127.0.0.1:$PORT" >> "$LOG_DIR/cloudflared.log" 2>&1 &
+  echo $! > "$LOG_DIR/tunnel.pid"
+  for _ in $(seq 1 40); do
+    sleep 0.5
+    URL="$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOG_DIR/cloudflared.log" 2>/dev/null | tail -1 || true)"
+    [ -n "$URL" ] && return 0
+    kill -0 "$(cat "$LOG_DIR/tunnel.pid")" 2>/dev/null || return 1
+  done
+  return 1
+}
 
+say "Starting the Cloudflare quick tunnel (nohup)..."
 PUBLIC_URL=""
-for _ in $(seq 1 60); do
-  sleep 0.5
-  PUBLIC_URL="$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOG_DIR/cloudflared.log" 2>/dev/null | head -1 || true)"
-  [ -n "$PUBLIC_URL" ] && break
-  kill -0 "$(cat "$LOG_DIR/tunnel.pid")" 2>/dev/null || { tail -20 "$LOG_DIR/cloudflared.log"; die "Tunnel failed to start"; }
-done
-[ -n "$PUBLIC_URL" ] || die "No trycloudflare URL appeared — check $LOG_DIR/cloudflared.log"
+if start_tunnel; then
+  echo "  connected"
+elif start_tunnel --protocol http2 --edge-ip-version 4; then
+  echo "  connected (http2 / IPv4 fallback)"
+else
+  tail -20 "$LOG_DIR/cloudflared.log" >&2
+  die "cloudflared could not register a tunnel — see $LOG_DIR/cloudflared.log"
+fi
+
+# The hostname is only useful once the connector is actually registered.
+sleep 2
+kill -0 "$(cat "$LOG_DIR/tunnel.pid")" 2>/dev/null || die "cloudflared exited right after starting"
 printf '%s' "$PUBLIC_URL" > "$STUDIO_DIR/public_url.txt"
+
+# ── 8. verify the public URL actually answers ──────────────────────────────
+say "Verifying the public URL..."
+OK=0
+for _ in $(seq 1 20); do
+  sleep 2
+  if curl -fsS --max-time 10 "$PUBLIC_URL/api/session" >/dev/null 2>&1; then OK=1; break; fi
+done
+if [ "$OK" = "1" ]; then
+  echo "  $PUBLIC_URL is responding"
+else
+  warn "$PUBLIC_URL did not answer yet — the tunnel may still be propagating."
+  warn "check: tail -f $LOG_DIR/cloudflared.log"
+fi
 
 # ── 8. done ────────────────────────────────────────────────────────────────
 PASSWORD="$(grep -m1 '^STUDIO_PASSWORD=' "$APP_DIR/.env" | cut -d= -f2- || true)"

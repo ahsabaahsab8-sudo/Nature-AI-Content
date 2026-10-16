@@ -1,155 +1,178 @@
-# 🌿 Nature AI Content
+# 🌿 Nature AI Content Studio — Autonomous Short-Form Video Generator 🎬
 
-A self-hosted web dashboard that turns **one sentence** into a finished short video:
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Cloudflare](https://img.shields.io/badge/Cloudflare-Tunnel-F38020?logo=cloudflare&logoColor=white)](https://cloudflare.com)
+[![HyperFrames](https://img.shields.io/badge/Renderer-HyperFrames%20CLI-FF4081)](https://github.com)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-```
-brief → LLM writes the story plan + N image prompts → you drop N images into N boxes
-      → LLM writes the HyperFrames composition → lint → render → preview + download
-```
-
-Everything runs on one box: FastAPI + SQLite + the HyperFrames CLI, published to the
-internet through a Cloudflare quick tunnel (`https://*.trycloudflare.com`).
+> 🚀 **Transform a single sentence or prompt into a high-converting, rendered cinematic short-form video in seconds.**  
+> Powered by LLM story planning, automated image slotting, HyperFrames code-gen (GSAP animations), headless rendering, and zero-config Cloudflare Tunnels.
 
 ---
 
-## Deploy on a VPS (Ubuntu/Debian)
+## 🌟 Overview & Key Capabilities
+
+**Nature AI Content Studio** is a production-grade, self-hosted web studio built for automated video creation pipelines:
+
+* 📝 **Automated Storyboard & Hook Engine**: Turns short prompts into narrative arcs with retention hooks, scene pacing, and Calls-to-Action (CTA).
+* 🎨 **Multi-Slot Image Prompter**: Generates per-scene Midjourney/Flux/SD prompts with 1-click clipboard copy and drag-and-drop asset matching.
+* ⚡ **HyperFrames & GSAP Rendering**: Synthesizes reactive web animations, dynamic text layers, camera pans, and transitions rendered directly to high-bitrate MP4.
+* 🌐 **Instant Cloudflare Quick Tunnel**: Exposes your local instance or VPS securely over HTTPS (`https://*.trycloudflare.com`) with zero port-forwarding.
+* 🔒 **Secured Dashboard**: Password protection with HTTP-only signed session tokens and live Server-Sent Events (SSE) progress bars.
+
+```
+┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
+│  Prompt / Brief │ ───>  │ LLM Story Plan  │ ───>  │ Image Prompting │
+└─────────────────┘       └─────────────────┘       └────────┬────────┘
+                                                             │
+┌─────────────────┐       ┌─────────────────┐       ┌────────▼────────┐
+│  MP4 Video Out  │ <───  │ HyperFrames CLI │ <───  │  Asset Drop &   │
+│ (1080x1920 60f) │       │ GSAP Rendering  │       │  Code Synthesis │
+└─────────────────┘       └─────────────────┘       └─────────────────┘
+```
+
+---
+
+## 🛠️ Tech Stack
+
+| Component | Technology | Description |
+| :--- | :--- | :--- |
+| **Backend API** | FastAPI / Uvicorn | Async REST endpoints, SSE streams, range-request MP4 video delivery |
+| **Database** | SQLite3 | Embedded persistence for projects, scene slots, prompt state, and renders |
+| **Rendering Engine** | HyperFrames CLI + Puppeteer | Headless Chrome video compositor executing JavaScript GSAP animations |
+| **LLM Gateway** | KiloCode API / OpenAI-compatible | Generates scene scripts, camera movements, and HTML5 canvas code |
+| **Networking** | Cloudflare Tunnel (`cloudflared`) | Secure ingress without opening firewall ports or public IP exposure |
+| **Frontend UI** | Modern Vanilla JS + CSS Glassmorphism | Zero-build fast dashboard with drag-and-drop media uploaders |
+
+---
+
+## 🔑 Required Environment Variables (`.env`)
+
+Create a `.env` file in the project root by copying `.env.example`:
 
 ```bash
-git clone https://github.com/ahsabaahsab8/Nature-AI-Content.git nature-ai
-cd nature-ai
+cp .env.example .env
+```
+
+| Variable | Required | Description | Example / Default |
+| :--- | :---: | :--- | :--- |
+| `KILOCODE_API_KEY` | **Yes** | API key for LLM code generation (KiloCode or OpenAI format) | `your_api_key_here` |
+| `KILOCODE_BASE_URL` | No | Base API endpoint for the LLM gateway | `https://api.kilo.ai/api/gateway` |
+| `KILOCODE_MODEL` | No | Target LLM model for scriptwriting and code generation | `stepfun/step-5-preview-free` |
+| `STUDIO_PASSWORD` | **Yes** | Web UI login password to prevent unauthorized generation | `YourSuperSecurePassword123!` |
+| `PROJECTS_DIR` | No | Local folder where intermediate assets and code reside | `./renders` |
+| `DEFAULT_WIDTH` | No | Horizontal video resolution in pixels | `1080` (9:16 portrait) |
+| `DEFAULT_HEIGHT` | No | Vertical video resolution in pixels | `1920` (Shorts / Reels / TikTok) |
+| `DEFAULT_FPS` | No | Rendered video frame rate | `30` or `60` |
+
+---
+
+## 🚀 Quick Start: Deployment on a Linux VPS (Ubuntu / Debian)
+
+### Option 1: One-Click Automated Script (`deploy.sh`)
+
+Run the automated installer on any fresh Ubuntu/Debian server:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/ahsabaahsab8-sudo/Nature-AI-Content.git
+cd Nature-AI-Content
+
+# 2. Configure your environment
+cp .env.example .env
+nano .env   # Enter your KILOCODE_API_KEY and STUDIO_PASSWORD
+
+# 3. Execute setup & background daemon
 chmod +x deploy.sh
 sudo ./deploy.sh
 ```
 
-`deploy.sh` installs python3 + ffmpeg + nodejs, the HyperFrames CLI, cloudflared and
-the Python deps, then starts both the API and the tunnel with **nohup** — closing
-SSH will not stop it. It prints your public URL and the dashboard password when done.
-
-<details>
-<summary>Cloudflare Error 1033? (tunnel hostname unreachable)</summary>
-
-1033 means the hostname exists but no `cloudflared` is connected. Almost always the
-connector died or you're looking at a **stale URL from a previous run**.
-
-```bash
-cd /opt/nature-ai
-
-# 1. is the API alive?
-curl -s http://127.0.0.1:8787/api/session | head -c 120
-
-# 2. is cloudflared alive?
-ps aux | grep '[c]loudflared'
-
-# 3. the CURRENT url (newest, not oldest)
-grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' studio/logs/cloudflared.log | tail -1
-
-# 4. why did it die?
-tail -30 studio/logs/cloudflared.log
-```
-
-Restart it by hand:
-
-```bash
-pkill -f 'cloudflared tunnel'
-cd /opt/nature-ai/studio
-nohup cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8787 \
-      >> logs/cloudflared.log 2>&1 &
-sleep 8
-grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' logs/cloudflared.log | tail -1
-```
-
-On containers or IPv6-less hosts, force the fallback flags:
-
-```bash
-nohup cloudflared tunnel --no-autoupdate --protocol http2 --edge-ip-version 4 \
-      --url http://127.0.0.1:8787 >> logs/cloudflared.log 2>&1 &
-```
-
-`deploy.sh` already tries that fallback automatically. Just re-run `sudo ./deploy.sh`
-— it truncates the logs, so the URL it prints is always the live one.
-</details>
-
-<details>
-<summary>Manual install (if you'd rather do it step by step)</summary>
-
-```bash
-sudo apt-get update
-sudo apt-get install -y python3 python3-venv ffmpeg curl ca-certificates gnupg
-
-# nodejs (needed for the HyperFrames CLI)
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt-get install -y nodejs
-sudo npm install -g hyperframes
-
-# cloudflared
-curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloudflare-main.gpg
-echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' \
-  | sudo tee /etc/apt/sources.list.d/cloudflared.list
-sudo apt-get update && sudo apt-get install -y cloudflared
-
-# python deps
-python3 -m venv .venv
-.venv/bin/pip install -r studio/requirements.txt
-```
-
-Then run both halves in the background:
-
-```bash
-cd studio
-nohup ../.venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 8787 \
-      >> logs/api.log 2>&1 &
-nohup cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8787 \
-      >> logs/cloudflared.log 2>&1 &
-
-# the tunnel URL
-grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' logs/cloudflared.log | head -1
-```
-</details>
+`deploy.sh` automatically provisions:
+1. `python3-venv`, `ffmpeg`, `nodejs 22.x`, and `cloudflared`
+2. Installs global `hyperframes` CLI via npm
+3. Builds virtual environment and installs dependencies
+4. Launches both Uvicorn and Cloudflare Tunnel in the background with health monitors
 
 ---
 
-## Using the dashboard
+### Option 2: Production `systemd` Service Setup
 
-| Step | What happens |
-|------|--------------|
-| **1 · Describe your video** | Type the brief, pick a duration, hit **Analyse**. The LLM streams its plan live. |
-| **2 · Story plan** | Hook, tone, CTA and the scene-by-scene arc. *Regenerate plan* re-runs PHASE 1. |
-| **3 · Image prompts** | One card per image. **Copy prompt** → paste into your image generator. |
-| **4 · Add your images** | Exactly one box per prompt. Tap a box to open the gallery, drag-drop, or paste from the clipboard. |
-| **5 · Generate code & render** | Enabled only when every box is filled. Live 0–100 % progress + console. |
-| **History** | Every rendered video with inline preview + **Download MP4**. *Import from renders/* picks up videos made outside the dashboard. |
+For resilient 24/7 background operation with auto-restart on crashes or reboots:
 
-Projects are written to `./<project-slug>/` and MP4s to `./renders/`.
+1. **Create the systemd service file**:
+   ```bash
+   sudo nano /etc/systemd/system/nature-ai-studio.service
+   ```
 
----
+2. **Add configuration**:
+   ```ini
+   [Unit]
+   Description=Nature AI Content Studio Daemon
+   After=network.target
 
-## Layout
+   [Service]
+   Type=simple
+   User=root
+   WorkingDirectory=/opt/Nature-AI-Content/studio
+   EnvironmentFile=/opt/Nature-AI-Content/.env
+   ExecStart=/opt/Nature-AI-Content/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8787
+   Restart=always
+   RestartSec=5
 
-```
-.env                   KiloCode key + dashboard password (per-machine settings)
-SYSTEM_INSTRUCTIONS.md the HyperFrames/GSAP rules the code-generation phase obeys
-deploy.sh              one-shot VPS setup + nohup launcher
-studio/
-  app.py               FastAPI routes · SSE live feed · range-request video serving · auth
-  pipeline.py          LLM phases, lint/render orchestration, progress parsing
-  parsing.py           PHASE-1 answer → story plan + image slots; LLM reply → index.html
-  prompts.py           manifest contract + code-generation system prompt
-  store.py             SQLite: projects, slots, chat history, events, videos
-  config.py            .env loader + HyperFrames CLI resolution
-  static/              the dashboard (vanilla HTML/CSS/JS, no build step)
-  run.sh / run.ps1     interactive launcher (also opens the tunnel)
-  requirements.txt
-  test_*.py, smoke_test.py
-renders/               finished MP4s (git-ignored)
-```
+   [Install]
+   WantedBy=multi-user.target
+   ```
 
-Full documentation: **[studio/README.md](studio/README.md)**.
+3. **Enable & Start**:
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now nature-ai-studio
+   sudo systemctl status nature-ai-studio
+   ```
 
 ---
 
-## ⚠️ Security
+## 🖥️ Using the Studio Dashboard
 
-- **`.env` is committed in this repo and contains a live `KILOCODE_API_KEY`.** Because the repo is public, anyone can read and spend that key. Rotate it as soon as you can, or move it out of git and set `KILOCODE_API_KEY` in the VPS environment instead.
-- Set `STUDIO_PASSWORD` before exposing the box. Sessions are HMAC-signed, HttpOnly cookies; the API binds `127.0.0.1` so it is only reachable through the tunnel.
-- Rendering executes LLM-authored code inside Chrome. Keep it on a throwaway box, not a machine with anything precious on it.
-- A quick-tunnel URL changes on every restart. Use a [named tunnel](studio/README.md#named-tunnel-for-a-permanent-url) for a stable hostname.
+1. **Step 1 — Video Brief**: Enter your topic (e.g. *"Top 3 bioluminescent plants and how they glow at night"*), set target duration (15s–60s), and hit **Analyze**.
+2. **Step 2 — Narrative Plan**: The AI generates a 3-part storyline (Hook, Body, CTA) with visual cues and timeframes.
+3. **Step 3 — Scene Slots & Prompts**: Copy optimized prompts for Midjourney / Stable Diffusion directly from the cards.
+4. **Step 4 — Drag & Drop**: Drop matching images into the corresponding scene slots.
+5. **Step 5 — Generate & Render**: Click **Synthesize Video**. Watch the real-time build log compile the animations and render the final MP4.
+6. **Step 6 — Preview & Export**: Download the MP4 ready for YouTube Shorts, Instagram Reels, and TikTok!
+
+---
+
+## 📂 Project Architecture
+
+```
+Nature-AI-Content/
+├── .env.example          # Environment blueprint with placeholders
+├── deploy.sh             # Zero-touch Linux VPS automated deployment script
+├── doctor.sh             # Diagnostic script for checking dependencies & tunnels
+├── SYSTEM_INSTRUCTIONS.md# GSAP & HyperFrames code generation rules
+├── renders/              # Output directory for compiled MP4 videos
+└── studio/
+    ├── app.py            # FastAPI REST & SSE controller
+    ├── pipeline.py       # Orchestration pipeline for code synthesis & rendering
+    ├── parsing.py        # Parser for LLM stream payloads & HTML5 extraction
+    ├── prompts.py        # System prompts and schema specifications
+    ├── store.py          # SQLite persistence layer
+    ├── config.py         # App configuration & environment loader
+    └── static/           # Glassmorphism frontend UI (HTML5/CSS3/Vanilla JS)
+```
+
+---
+
+## 🛡️ Security & Safe Usage
+
+* **Never commit real API keys**: Ensure `.env` is listed in your `.gitignore` before pushing changes.
+* **Keep `STUDIO_PASSWORD` secure**: Any visitor to your Cloudflare URL can generate renders if authentication is disabled.
+* **Resource Monitoring**: Video rendering with Puppeteer uses CPU/RAM spikes; a VPS with at least 2 vCPUs and 4GB RAM is recommended.
+
+---
+
+## 📄 License
+
+Distributed under the MIT License. See [LICENSE](LICENSE) for more details.
